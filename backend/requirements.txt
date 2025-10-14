@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+# Adaptador asíncrono de alto rendimiento
+asyncpg 
+# ORM (Mapeo Objeto-Relacional)
+sqlalchemy

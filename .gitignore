@@ -1,0 +1,13 @@
+pycache/
+*.pyc
+.pytest_cache/
+.venv
+venv/
+env/
+*.sqlite
+*.db
+pgdata/
+.idea/
+.vscode/
+*.log
+.env

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # === SERVICIO DE BASE DE DATOS (DB) ===
+  db:
+    image: postgres:16-alpine
+    
+    environment:
+      POSTGRES_USER: jnegrete
+      POSTGRES_PASSWORD: IntiMayu
+      POSTGRES_DB: federici
+      
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      
+    ports:
+      - "5432:5432"
+      
+    restart: always
+  
+  # === SERVICIO DE BACKEND (FASTAPI) ===
+  backend:
+    # Construye a partir del Dockerfile que está en la carpeta 'backend'
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      
+    # Mapea los puertos
+    ports:
+      - "8000:8000"
+      
+    # Variables de entorno CLAVE para que el código Python sepa cómo conectar a la DB
+    environment:
+      DB_HOST: db # CLAVE: Este es el nombre del servicio de DB en Docker Compose
+      DB_NAME: federici
+      DB_USER: jnegrete
+      DB_PASS: IntiMayu
+      DB_PORT: 5432
+
+    # CLAVE: Comando de inicio explícito con --reload para desarrollo
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+    # Montaje de volumen para desarrollo
+    volumes:
+      # CORRECCIÓN: Ahora mapea el código local a /app/backend, que es el WORKDIR en el Dockerfile.
+      - ./backend:/app/backend
+      
+    # Asegura que la DB esté lista antes de que el backend intente conectar
+    depends_on:
+      - db
+    
+    # Reinicia automáticamente para desarrollo
+    restart: always
+
+# === VOLÚMENES PERSISTENTES ===
+volumes:
+  db_data:

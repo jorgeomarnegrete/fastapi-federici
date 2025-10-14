@@ -1,0 +1,129 @@
+# backend/schemas/maestros.py
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import date
+
+# Importar schemas que se anidan
+# CORRECCIÓN: Importamos Producto y RutaMaestra de auxiliares
+from ..schemas.auxiliares import RutaMaestra, RutaDetalle, Producto 
+
+# --- Clientes ---
+class ClienteCreate(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    direccion: Optional[str] = Field(None, max_length=255)
+    localidad: Optional[str] = Field(None, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=50)
+
+class Cliente(ClienteCreate):
+    cliente_id: int
+    class Config:
+        from_attributes = True
+
+class PaginatedClientes(BaseModel):
+    total_registros: int
+    clientes: list[Cliente]
+    pagina_actual: int
+    tamanio_pagina: int
+
+# --- Pedidos ---
+class PedidoCreate(BaseModel):
+    cliente_id: int = Field(..., description="ID del cliente que realiza el pedido.")
+    fecha_entrega_estimada: Optional[date] = None
+    detalle: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class Pedido(PedidoCreate):
+    pedido_id: int
+    numero_pedido_externo: str
+    fecha: date 
+    cliente: "Cliente"
+
+    class Config:
+        from_attributes = True
+
+class PaginatedPedidos(BaseModel):
+    total_registros: int
+    pedidos: list[Pedido] 
+    pagina_actual: int
+    tamanio_pagina: int
+
+class PedidoUpdate(BaseModel):
+    fecha_entrega_estimada: Optional[date] = None
+    detalle: Optional[str] = None
+    observaciones: Optional[str] = None
+
+# --- Órdenes de Producción (OP) ---
+class OPCreate(BaseModel):
+    pedido_id: Optional[int] = Field(None, description="ID del pedido de cliente, si aplica.")
+    fecha_estimada_entrega: Optional[date] = None
+    detalle: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class OPUpdate(BaseModel):
+    fecha_estimada_entrega: Optional[date] = None
+    detalle: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class OP(OPCreate):
+    op_id: int
+    numero_op_externo: str
+    fecha: date
+    pedido: Optional["Pedido"] = None 
+
+    class Config:
+        from_attributes = True
+
+class PaginatedOP(BaseModel):
+    total_registros: int
+    ops: list[OP]
+    pagina_actual: int
+    tamanio_pagina: int
+
+# --- ENUMS PARA EL ESTADO DEL LOTE ---
+from enum import IntEnum
+
+class EstadoLote(IntEnum):
+    EN_ESPERA = 1
+    EN_PROCESO = 2
+    LIBERADO = 3
+    
+# --- ESQUEMAS PARA LOTES (BATCHES) ----------------------------------------------------
+
+# Esquema base para la creación o visualización (Input/Output)
+class LoteBase(BaseModel):
+    # Campos proporcionados
+    op_id: int = Field(..., description="ID de la Orden de Producción (OP) a la que pertenece este lote.")
+    lote_numero_visible: Optional[str] = Field(None, max_length=50, description="Número de lote visible (QR/Etiqueta).")
+    producto_id: int = Field(..., description="ID del Producto asociado.")
+    ruta_id: int = Field(..., description="ID de la Ruta Maestra asociada.")
+    
+    # El estado se puede cambiar al actualizar, pero se inicializa en 1.
+    estado: EstadoLote = Field(EstadoLote.EN_ESPERA, description="Estado del lote (1=En Espera, 2=En Proceso, 3=Liberado).")
+
+# Esquema para la creación de un nuevo Lote (Input)
+class LoteCreate(LoteBase):
+    pass
+
+# Esquema para la representación completa de un Lote (Output)
+class Lote(LoteBase):
+    lote_interno_id: int
+
+    # Relaciones (Para evitar dependencia circular)
+    op_asociada: Optional["OP"] = None
+    producto: Optional["Producto"] = None 
+    ruta: Optional["RutaMaestra"] = None
+
+    class Config:
+        from_attributes = True
+
+# Esquema para paginación de lotes
+class PaginatedLotes(BaseModel):
+    total: int
+    data: List[Lote]
+
+# --- REBUILDING PARA RESOLVER RELACIONES CIRCULARES ---
+# Esto es vital. Si Lote y OP se referencian, ambos necesitan rebuild.
+# Asegúrate de que las demás clases que usan el rebuild (como OP) también lo hagan.
+OP.model_rebuild() 
+Lote.model_rebuild()
