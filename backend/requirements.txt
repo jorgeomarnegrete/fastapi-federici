@@ -1,6 +1,11 @@
 fastapi
 uvicorn[standard]
-# Adaptador asíncrono de alto rendimiento
-asyncpg 
-# ORM (Mapeo Objeto-Relacional)
-sqlalchemy
+pydantic[email]
+pydantic-settings
+
+asyncpg
+
+sqlalchemy[asyncio]
+psycopg2-binary
+python-dotenv
+passlib[bcrypt]
