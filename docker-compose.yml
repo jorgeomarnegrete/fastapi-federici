@@ -1,9 +1,11 @@
 version: '3.8'
 
-services:
+services: # <-- CLAVE: Los tres servicios deben estar aquí debajo, al mismo nivel de indentación.
+  
   # === SERVICIO DE BASE DE DATOS (DB) ===
   db:
     image: postgres:16-alpine
+    container_name: db_federici
     
     environment:
       POSTGRES_USER: jnegrete
@@ -17,13 +19,14 @@ services:
       - "5432:5432"
       
     restart: always
-  
+ 
   # === SERVICIO DE BACKEND (FASTAPI) ===
   backend:
     # Construye a partir del Dockerfile que está en la carpeta 'backend'
     build:
       context: .
       dockerfile: ./backend/Dockerfile
+    container_name: backend_federici # Nombre del contenedor backend
       
     # Mapea los puertos
     ports:
@@ -48,9 +51,27 @@ services:
     # Asegura que la DB esté lista antes de que el backend intente conectar
     depends_on:
       - db
-    
-    # Reinicia automáticamente para desarrollo
+      
     restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile 
+    container_name: op_frontend
+    restart: always
+    # === LA CORRECCIÓN CLAVE: 5173 del Host va al 5173 del Contenedor (donde corre Vite) ===
+    ports:
+      - "5173:5173" 
+    volumes:
+      # Monta el código fuente para el hot-reload de React/Vite
+      - ./frontend:/app
+      # Evita que node_modules se sobreescriba desde el host
+      - /app/node_modules
+    depends_on:
+      - backend
+
+
 
 # === VOLÚMENES PERSISTENTES ===
 volumes:

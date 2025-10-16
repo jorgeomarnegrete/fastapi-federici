@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+/* Carpeta: frontend/src/index.css */
+
+/* CLAVE: Estas directivas son las que el procesador de Tailwind/PostCSS busca
+para generar todos los estilos de las clases que uses en tu código React. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos de fuente global (Inter) */
+body {
+/* Aquí definimos la fuente que usaremos globalmente */
+font-family: 'Inter', sans-serif;
+/* Fix de compatibilidad: Forzamos el fondo base */
+background-color: #f9fafb; /* bg-gray-50 */
+}
