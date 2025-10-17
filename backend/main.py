@@ -1,37 +1,50 @@
-# backend/main.py
-
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
+from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
+from typing import Optional # Añadida por si se usa
 
-# Los imports deben ser relativos ya que el WORKDIR es /app/backend/
-# CORRECCIÓN: Se elimina el prefijo 'backend.'
-from database import init_db, get_db_session, engine
-import backend.models
-from routers import clientes, pedidos, op, rutas, lotes
-from routers import users
+# CLAVE DE CORRECCIÓN: Importamos el esquema de seguridad preconfigurado
+from backend.core.auth_bearer import oauth2_scheme 
 
-# Cargar variables de entorno
-load_dotenv()
+# CLAVE: Importar todos los routers de la aplicación usando el estilo de importación absoluta
+from backend.routers import (
+    clientes, 
+    pedidos, 
+    op, 
+    lotes, 
+    users,      # Router de Usuarios (Registro y Perfil /me)
+    auth_router, # Router de Autenticación (Login)
+    # rutas,     # Asegúrate de que este router exista si lo importas
+)
+# Base de datos
+from backend.database import Base, engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# --- BASE DE DATOS: CREACIÓN DE TABLAS ---
+# Importar modelos para que Base.metadata los detecte
+import backend.models 
+
+
+# =================================================================
+# SEGURIDAD: Esquema para Swagger UI
+# =================================================================
+
+# IMPORTANTE: Eliminamos la creación de OAuth2PasswordBearer aquí.
+# Usamos el objeto 'oauth2_scheme' importado de backend.core.auth_bearer.py,
+# que ya está configurado para apuntar a "auth/login".
+
+
+# =================================================================
+# CICLO DE VIDA (LIFESPAN) Y CREACIÓN DE TABLAS
+# =================================================================
 
 async def create_db_and_tables():
     """
     Función que crea todas las tablas de la base de datos basadas en los 
-    modelos registrados con Base.metadata.
-    
-    Usa el engine asíncrono para ejecutar la creación de tablas.
+    modelos registrados, incluyendo la tabla 'users'.
     """
     print("Iniciando la creación/recreación de tablas...")
     async with engine.begin() as conn:
-        # Nota: La metadata contiene todos los modelos importados previamente
-        # DROP_ALL es solo para desarrollo y recreación
-        # await conn.run_sync(Base.metadata.drop_all) 
-        
-        # CREATE_ALL es la clave para que la tabla 'users' se cree
+        # CREATE_ALL es la clave para que todas las tablas, incluida 'users', se creen
         await conn.run_sync(Base.metadata.create_all)
     print("Base de datos y tablas inicializadas correctamente.")
 
@@ -39,27 +52,34 @@ async def create_db_and_tables():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Manejador del ciclo de vida de la aplicación.
-    Se ejecuta al iniciar el servidor (startup).
+    Manejador del ciclo de vida de la aplicación. Se ejecuta al iniciar el servidor.
     """
     # Llama a la función de creación de tablas al arrancar el servidor
-    await create_db_and_tables()
+    await create_db_and_tables() 
+    print("Manejador de ciclo de vida ejecutado: Startup completo.")
     yield
     # Código de limpieza si fuera necesario al apagar (shutdown)
 
 
-# --- Configuración de la aplicación FastAPI ---
+# =================================================================
+# CONFIGURACIÓN INICIAL DE LA APP
+# =================================================================
+
 app = FastAPI(
-    title="Sistema de Producción y Maestros",
+    title="Sistema de Gestión de OP (FastAPI)",
+    description="API para la gestión de clientes, pedidos, órdenes de producción, lotes y rutas, con Autenticación JWT.",
     version="1.0.0",
-    description="API para la gestión de clientes, pedidos, órdenes de producción, lotes y rutas."
+    # CLAVE: Usamos el nuevo manejador de ciclo de vida
+    lifespan=lifespan
 )
 
-# Configuración de CORS para permitir conexiones desde el frontend
+# Configuración de CORS
 origins = [
-    "http://localhost:3000",  # Frontend local, si existe
-    "http://127.0.0.1:3000",
-    "*"  # Permite cualquier origen para facilitar el desarrollo
+    "http://localhost",
+    "http://localhost:8000",
+    "http://localhost:5173",  # Puerto de desarrollo de Vite
+    "http://127.0.0.1:5173",
+    "*"
 ]
 
 app.add_middleware(
@@ -70,24 +90,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Rutas de la API ---
+
+# =================================================================
+# INCLUSIÓN DE ROUTERS
+# =================================================================
+
+# Routers de Autenticación y Usuarios (Primero para visibilidad)
+app.include_router(auth_router.router)
+app.include_router(users.router)
+
+# Routers de Maestros y Producción
 app.include_router(clientes.router)
 app.include_router(pedidos.router)
 app.include_router(op.router)
-app.include_router(rutas.router)
+# Si el router 'rutas' no existe, descomenta o crea el archivo:
+# app.include_router(rutas.router) 
 app.include_router(lotes.router)
-app.include_router(users.router)
 
 
-# --- Eventos de la Aplicación ---
-@app.on_event("startup")
-async def startup_event():
-    """Inicializa la base de datos y las tablas al arrancar la aplicación."""
-    await init_db()
-    print("Base de datos inicializada correctamente.")
+# =================================================================
+# RUTA RAIZ (Health Check)
+# =================================================================
 
 @app.get("/")
-def read_root():
-    return {"message": "API de Gestión de Producción y Maestros activa."}
-
-# Nota: El servicio Uvicorn se encarga de ejecutar 'main:app'
+async def root():
+    return {"message": "API de Gestión de OP funcionando correctamente."}

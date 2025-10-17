@@ -9,3 +9,7 @@ sqlalchemy[asyncio]
 psycopg2-binary
 python-dotenv
 passlib[bcrypt]
+
+python-jose
+python-multipart
+
