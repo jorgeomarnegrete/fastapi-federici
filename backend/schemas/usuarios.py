@@ -1,78 +1,43 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, EmailStr, ConfigDict # Importamos ConfigDict
+from typing import Optional
 from datetime import datetime
-from typing import Optional, List
 
-# --- Esquemas de Base ---
+# --- Esquemas Base ---
 
 class UserBase(BaseModel):
-    """Campos comunes a la mayoría de las operaciones."""
-    email: EmailStr = Field(..., example="usuario@empresa.com", description="Identificador único del usuario.")
-    # CORRECCIÓN: Usamos 'full_name' para coincidir con el modelo ORM (backend/models/usuarios.py)
-    full_name: Optional[str] = Field(None, example="Juan Pérez", alias="nombre")
+    # En Pydantic, usamos snake_case de Python
+    email: EmailStr = Field(..., example="usuario@empresa.com")
+    
+    # Usamos el nombre exacto de la columna ORM ('nombre') para mapeo directo.
+    nombre: Optional[str] = Field(None, example="Juan Pérez") 
 
-
-# --- Esquema de Creación ---
+# --- Esquema de Entrada (CREATE) ---
 
 class UserCreate(UserBase):
-    """Esquema de entrada para crear un nuevo usuario."""
-    password: str = Field(..., min_length=8, example="ContraseniaSegura123")
-    # Campos opcionales para asignar permisos al crear
+    password: str = Field(..., min_length=6, example="secreto123")
     is_active: Optional[bool] = True
     is_admin: Optional[bool] = False
 
-
-# --- Esquema de Actualización ---
-
-class UserUpdate(UserBase):
-    """Esquema de entrada para actualizar un usuario. Todos los campos son opcionales."""
-    email: Optional[EmailStr] = None # Permitir actualizar, pero opcional
-    password: Optional[str] = Field(None, min_length=8, example="NuevaContrasenia123")
-    is_active: Optional[bool] = None
-    is_admin: Optional[bool] = None
-    
-    model_config = {
-        "extra": "forbid", # Evita campos adicionales
-    }
-
-
-# --- Esquema de Respuesta (Lectura) ---
+# --- Esquema de Salida (READ) y Base de Datos ---
 
 class User(UserBase):
-    """Esquema de salida. NUNCA incluye el campo de contraseña."""
     user_id: int
     is_active: bool
     is_admin: bool
-    fecha_creacion: datetime
-
-    class Config:
-        # Permite mapear desde el ORM
-        from_attributes = True 
-
-
-# --- ESQUEMA INTERNO DE BASE DE DATOS (CRUCIAL PARA AUTH) ---
-
-class UserInDB(User):
-    """
-    Esquema INTERNO que mapea los campos del ORM, incluyendo el campo de contraseña.
-    Necesario para la verificación de credenciales de login.
-    """
-    # CLAVE: Debe coincidir con el campo en el modelo ORM. 
-    # En nuestro modelo de usuario el hash está en 'password_hash'. 
-    # Para ser estrictos con pydantic, si lo quieres llamar 'password' aquí,
-    # debemos asegurarnos de que el ORM lo mapee correctamente, 
-    # pero para simplicidad, seguiré usando 'password_hash' en los routers.
-    password_hash: str = Field(..., description="Contraseña almacenada internamente (Texto Plano o Hash).")
-
-    class Config:
-        from_attributes = True
-
-
-# --- Esquema de Login (Mantenido del input del usuario) ---
-
-class LoginRequest(BaseModel):
-    """Esquema de entrada para la solicitud de login (si se usa JSON)."""
-    email: EmailStr = Field(..., example="usuario@empresa.com")
-    password: str = Field(..., example="ContraseniaSegura123")
+    # Nota: No incluimos password_hash
     
-# NOTA: En el router de login, actualmente usamos 'OAuth2PasswordRequestForm' (form data),
-# por lo que este esquema 'LoginRequest' solo se usaría si cambiáramos a login por JSON.
+    # El campo 'nombre' se llenará automáticamente con el valor del ORM.
+    fecha_creacion: Optional[datetime] = None 
+
+    # CLAVE: Configuración moderna de Pydantic V2
+    model_config = ConfigDict(
+        # Esto permite que Pydantic mapee los atributos del objeto SQLAlchemy (ORM).
+        from_attributes=True, 
+        # Ya no necesitamos 'by_alias' ni 'populate_by_name' al usar el mismo nombre ('nombre')
+        # Pero esta es la forma correcta de definir la configuración.
+    )
+
+# Esquema para usar internamente con el token JWT
+class UserInDB(User):
+    # Añade el hash de la contraseña para validación interna, pero NO se expone.
+    password_hash: str
